@@ -6,4 +6,11 @@
         <LangVersion>default</LangVersion>
     </PropertyGroup>
 
+    <ItemGroup>
+      <PackageReference Include="AWSSDK.DynamoDBv2" Version="4.0.0.4" />
+      <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.5" />
+      <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.5" />
+      <PackageReference Include="Microsoft.Extensions.Options" Version="9.0.5" />
+    </ItemGroup>
+
 </Project>
