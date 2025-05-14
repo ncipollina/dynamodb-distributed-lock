@@ -1,0 +1,13 @@
+<Project>
+    <PropertyGroup>
+        <VersionPrefix>1.0.0</VersionPrefix>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+
+        <!-- Other useful metadata -->
+        <RepositoryUrl>https://github.com/ncipollina/dynamodb-distributed-lock</RepositoryUrl>
+        <RepositoryType>git</RepositoryType>
+        <Authors>Nick Cipollina</Authors>
+        <PackageProjectUrl>https://github.com/ncipollina/dynamodb-distributed-lock</PackageProjectUrl>
+    </PropertyGroup>
+
+</Project>
