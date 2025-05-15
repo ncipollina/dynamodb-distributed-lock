@@ -53,7 +53,7 @@ public class DynamoDbDistributedLock : IDynamoDbDistributedLock
             ConditionExpression = "attribute_not_exists(pk) AND attribute_not_exists(sk) OR expiresAt < :now",
             ExpressionAttributeValues = new Dictionary<string, AttributeValue>
             {
-                [":now"] = new() { N = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString() }
+                [":now"] = new() { N = now.ToString() }
             }
         };
 
