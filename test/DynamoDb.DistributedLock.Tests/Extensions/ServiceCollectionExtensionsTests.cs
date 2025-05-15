@@ -1,8 +1,10 @@
+using Amazon.DynamoDBv2;
 using DynamoDb.DistributedLock.Extensions;
 using FluentAssertions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using NSubstitute;
 
 namespace DynamoDb.DistributedLock.Tests.Extensions;
 
@@ -21,6 +23,9 @@ public class ServiceCollectionExtensionsTests
             options.LockTimeoutSeconds = 45;
         });
 
+        // 👇 Override with mock AFTER to bypass credential resolution
+        services.AddSingleton(Substitute.For<IAmazonDynamoDB>());
+        
         var provider = services.BuildServiceProvider();
 
         // Assert
@@ -49,7 +54,9 @@ public class ServiceCollectionExtensionsTests
         var services = new ServiceCollection();
 
         // Act
-        services.AddDynamoDbDistributedLock(configuration, "DynamoDbLock");
+        services.AddDynamoDbDistributedLock(configuration);
+        // 👇 Override with mock AFTER to bypass credential resolution
+        services.AddSingleton(Substitute.For<IAmazonDynamoDB>());
         var provider = services.BuildServiceProvider();
 
         // Assert
