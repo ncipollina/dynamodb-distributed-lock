@@ -4,7 +4,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Amazon.DynamoDBv2;
 using Amazon.DynamoDBv2.Model;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace DynamoDb.DistributedLock;
@@ -15,7 +14,6 @@ namespace DynamoDb.DistributedLock;
 public class DynamoDbDistributedLock : IDynamoDbDistributedLock
 {
     private readonly IAmazonDynamoDB _client;
-    private readonly ILogger<DynamoDbDistributedLock> _logger;
     private readonly DynamoDbLockOptions _options;
 
     /// <summary>
@@ -23,12 +21,10 @@ public class DynamoDbDistributedLock : IDynamoDbDistributedLock
     /// </summary>
     /// <param name="client">The DynamoDB client.</param>
     /// <param name="options">Configuration options for the lock.</param>
-    /// <param name="logger">Logger for diagnostic messages.</param>
-    public DynamoDbDistributedLock(IAmazonDynamoDB client, ILogger<DynamoDbDistributedLock> logger,
+    public DynamoDbDistributedLock(IAmazonDynamoDB client,
         IOptions<DynamoDbLockOptions> options)
     {
         _client = client ?? throw new ArgumentNullException(nameof(client));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _options = options.Value ?? throw new ArgumentNullException(nameof(options));
     }
 
@@ -68,7 +64,6 @@ public class DynamoDbDistributedLock : IDynamoDbDistributedLock
         }
         catch (ConditionalCheckFailedException)
         {
-            _logger.LogDebug("Failed to acquire lock for {ResourceId}: lock already held.", resourceId);
             return false; // Lock already held
         }
     }
@@ -104,7 +99,6 @@ public class DynamoDbDistributedLock : IDynamoDbDistributedLock
         }
         catch (ConditionalCheckFailedException)
         {
-            _logger.LogDebug("Failed to release lock for {ResourceId}: owner mismatch.", resourceId);
             return false; // Lock was held by another process
         }
     }
