@@ -15,4 +15,14 @@ public sealed class DynamoDbLockOptions
     /// Lock timeout duration in seconds.
     /// </summary>
     public int LockTimeoutSeconds { get; set; } = 30;
+    
+    /// <summary>
+    /// The name of the partition key attribute.
+    /// </summary>
+    public string PartitionKeyAttribute { get; set; } = "pk";
+    
+    /// <summary>
+    /// The name of the sort key attribute.
+    /// </summary>
+    public string SortKeyAttribute { get; set; } = "sk";
 }

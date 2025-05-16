@@ -45,8 +45,8 @@ public class DynamoDbDistributedLock : IDynamoDbDistributedLock
             TableName = _options.TableName,
             Item = new Dictionary<string, AttributeValue>
             {
-                ["pk"] = new() { S = $"lock#{resourceId}" },
-                ["sk"] = new() { S = "metadata#lock" },
+                [_options.PartitionKeyAttribute] = new() { S = $"lock#{resourceId}" },
+                [_options.SortKeyAttribute] = new() { S = "metadata#lock" },
                 ["ownerId"] = new() { S = ownerId },
                 ["expiresAt"] = new() { N = expiresAt.ToString() }
             },
@@ -82,8 +82,8 @@ public class DynamoDbDistributedLock : IDynamoDbDistributedLock
             TableName = _options.TableName,
             Key = new Dictionary<string, AttributeValue>
             {
-                ["pk"] = new() { S = $"lock#{resourceId}" },
-                ["sk"] = new() { S = "metadata#lock" },
+                [_options.PartitionKeyAttribute] = new() { S = $"lock#{resourceId}" },
+                [_options.SortKeyAttribute] = new() { S = "metadata#lock" },
             },
             ConditionExpression = "ownerId = :owner",
             ExpressionAttributeValues = new Dictionary<string, AttributeValue>
