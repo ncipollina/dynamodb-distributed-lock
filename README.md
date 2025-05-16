@@ -33,8 +33,8 @@ services.AddDynamoDbDistributedLock(options =>
 {
     options.TableName = "my-lock-table";
     options.LockTimeoutSeconds = 30;
-    options.PartitionKeyAttributeName = "pk";
-    options.SortKeyAttributeName = "sk";
+    options.PartitionKeyAttribute = "pk";
+    options.SortKeyAttribute = "sk";
 });
 ```
 
@@ -50,8 +50,8 @@ services.AddDynamoDbDistributedLock(configuration);
   "DynamoDbLock": {
     "TableName": "my-lock-table",
     "LockTimeoutSeconds": 30,
-    "PartitionKeyAttributeName": "pk",
-    "SortKeyAttributeName": "sk"
+    "PartitionKeyAttribute": "pk",
+    "SortKeyAttribute": "sk"
   }
 }
 ```
