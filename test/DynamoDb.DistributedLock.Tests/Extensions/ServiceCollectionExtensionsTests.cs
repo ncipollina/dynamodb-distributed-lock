@@ -1,5 +1,6 @@
 using Amazon.DynamoDBv2;
 using DynamoDb.DistributedLock.Extensions;
+using DynamoDb.DistributedLock.Tests.TestKit.Attributes;
 using FluentAssertions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -35,6 +36,8 @@ public class ServiceCollectionExtensionsTests
         var options = provider.GetRequiredService<IOptions<DynamoDbLockOptions>>().Value;
         options.TableName.Should().Be("locks");
         options.LockTimeoutSeconds.Should().Be(45);
+        options.PartitionKeyAttribute.Should().Be("pk");
+        options.SortKeyAttribute.Should().Be("sk");
     }
 
     [Fact]
@@ -66,5 +69,55 @@ public class ServiceCollectionExtensionsTests
         var options = provider.GetRequiredService<IOptions<DynamoDbLockOptions>>().Value;
         options.TableName.Should().Be("my-table");
         options.LockTimeoutSeconds.Should().Be(60);
+        options.PartitionKeyAttribute.Should().Be("pk");
+        options.SortKeyAttribute.Should().Be("sk");
+    }
+    
+    [Theory, BaseAutoData]
+    public void AddDynamoDbDistributedLock_WithAction_SetsCustomKeyAttributes(string partitionKey, string sortKey)
+    {
+        var services = new ServiceCollection();
+
+        services.AddDynamoDbDistributedLock(options =>
+        {
+            options.TableName = "locks";
+            options.LockTimeoutSeconds = 45;
+            options.PartitionKeyAttribute = partitionKey;
+            options.SortKeyAttribute = sortKey;
+        });
+
+        services.AddSingleton(Substitute.For<IAmazonDynamoDB>());
+        var provider = services.BuildServiceProvider();
+
+        var options = provider.GetRequiredService<IOptions<DynamoDbLockOptions>>().Value;
+
+        options.PartitionKeyAttribute.Should().Be(partitionKey);
+        options.SortKeyAttribute.Should().Be(sortKey);
+    }
+
+    [Theory, BaseAutoData]
+    public void AddDynamoDbDistributedLock_WithConfiguration_BindsCustomKeyAttributes(string partitionKey, string sortKey)
+    {
+        var inMemorySettings = new Dictionary<string, string>
+        {
+            ["DynamoDbLock:TableName"] = "my-table",
+            ["DynamoDbLock:LockTimeoutSeconds"] = "60",
+            ["DynamoDbLock:PartitionKeyAttribute"] = partitionKey,
+            ["DynamoDbLock:SortKeyAttribute"] = sortKey
+        };
+
+        IConfiguration configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(inMemorySettings!)
+            .Build();
+
+        var services = new ServiceCollection();
+        services.AddDynamoDbDistributedLock(configuration);
+        services.AddSingleton(Substitute.For<IAmazonDynamoDB>());
+        var provider = services.BuildServiceProvider();
+
+        var options = provider.GetRequiredService<IOptions<DynamoDbLockOptions>>().Value;
+
+        options.PartitionKeyAttribute.Should().Be(partitionKey);
+        options.SortKeyAttribute.Should().Be(sortKey);
     }
 }

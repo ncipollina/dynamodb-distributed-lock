@@ -19,3 +19,4 @@ public class DynamoDbDistributedLockAutoDataAttribute() : AutoDataAttribute(() =
 /// </summary>
 public class InlineDynamoDbDistributedLockAutoDataAttribute(params object[] values)
     : InlineAutoDataAttribute(new DynamoDbDistributedLockAutoDataAttribute(), values);
+    

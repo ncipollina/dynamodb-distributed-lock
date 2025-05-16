@@ -33,6 +33,8 @@ services.AddDynamoDbDistributedLock(options =>
 {
     options.TableName = "my-lock-table";
     options.LockTimeoutSeconds = 30;
+    options.PartitionKeyAttribute = "pk";
+    options.SortKeyAttribute = "sk";
 });
 ```
 
@@ -47,7 +49,9 @@ services.AddDynamoDbDistributedLock(configuration);
 {
   "DynamoDbLock": {
     "TableName": "my-lock-table",
-    "LockTimeoutSeconds": 30
+    "LockTimeoutSeconds": 30,
+    "PartitionKeyAttribute": "pk",
+    "SortKeyAttribute": "sk"
   }
 }
 ```
@@ -80,13 +84,16 @@ public class MyService(IDynamoDbDistributedLock distributedLock)
 
 ## 🏗️ Table Schema
 
-Ensure your DynamoDB table includes the following:
+This library supports both dedicated tables and shared, single-table designs. You do not need to create a separate table just for locking — this works seamlessly alongside your existing entities.
+
+By default, the library uses the following attributes:
 
 - Partition key: `pk` (String)
 - Sort key: `sk` (String)
 - TTL attribute: `expiresAt` (Number, UNIX timestamp in seconds)
 
-Enable TTL on the `expiresAt` field in the table settings.
+However, the partition and sort key attribute names are fully configurable via `DynamoDbLockOptions`. This makes it easy to integrate into your existing table structure.
+> ✅ Enable TTL on the expiresAt field in your table settings to allow automatic cleanup of expired locks.
 
 ---
 
