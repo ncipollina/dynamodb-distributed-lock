@@ -4,10 +4,10 @@
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
 
         <!-- Other useful metadata -->
-        <RepositoryUrl>https://github.com/ncipollina/dynamodb-distributed-lock</RepositoryUrl>
+        <RepositoryUrl>https://github.com/LayeredCraft/dynamodb-distributed-lock</RepositoryUrl>
         <RepositoryType>git</RepositoryType>
         <Authors>Nick Cipollina</Authors>
-        <PackageProjectUrl>https://github.com/ncipollina/dynamodb-distributed-lock</PackageProjectUrl>
+        <PackageProjectUrl>https://github.com/LayeredCraft/dynamodb-distributed-lock</PackageProjectUrl>
     </PropertyGroup>
 
 </Project>
