@@ -137,7 +137,7 @@ Console.WriteLine($"Lock is still valid: {lockHandle.IsAcquired}");
 
 ---
 
-## 🔄 Retry Configuration (v1.2.0+)
+## 🔄 Retry Configuration (v1.1.0+)
 
 The library includes built-in retry logic with exponential backoff to handle lock contention and DynamoDB throttling. Retry is **disabled by default** to maintain backward compatibility.
 
