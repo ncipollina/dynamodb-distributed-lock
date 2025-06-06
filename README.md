@@ -9,6 +9,7 @@
 - ✅ TTL-based expiration to prevent stale locks
 - ✅ AWS-native, no external infrastructure required
 - ✅ Simple `IDynamoDbDistributedLock` interface
+- ✅ **IAsyncDisposable support** for automatic lock cleanup
 - ✅ Tested and production-ready for .NET 8 and 9
 
 ---
@@ -61,12 +62,32 @@ services.AddDynamoDbDistributedLock(configuration);
 
 ### 3. Use the lock
 
+#### Recommended: IAsyncDisposable Pattern (v1.1.0+)
+
 ```csharp
 public class MyService(IDynamoDbDistributedLock distributedLock)
 {
     public async Task<bool> TryDoWorkAsync()
     {
-        var acquired = await distributedLock.AcquireLockAsync("resource-1", "owner-abc", CancellationToken.None);
+        await using var lockHandle = await distributedLock.AcquireLockHandleAsync("resource-1", "owner-abc");
+        if (lockHandle == null) return false; // Lock not acquired
+
+        // 🔧 Critical section - lock automatically released when disposed
+        // Your protected code here...
+        
+        return true;
+    }
+}
+```
+
+#### Traditional Pattern
+
+```csharp
+public class MyService(IDynamoDbDistributedLock distributedLock)
+{
+    public async Task<bool> TryDoWorkAsync()
+    {
+        var acquired = await distributedLock.AcquireLockAsync("resource-1", "owner-abc");
         if (!acquired) return false;
 
         try
@@ -75,12 +96,42 @@ public class MyService(IDynamoDbDistributedLock distributedLock)
         }
         finally
         {
-            await distributedLock.ReleaseLockAsync("resource-1", "owner-abc", CancellationToken.None);
+            await distributedLock.ReleaseLockAsync("resource-1", "owner-abc");
         }
 
         return true;
     }
 }
+```
+
+---
+
+## 🔧 Lock Handle API (v1.1.0+)
+
+The `AcquireLockHandleAsync` method returns an `IDistributedLockHandle` that implements `IAsyncDisposable` for automatic cleanup. This provides several benefits:
+
+### ✅ Automatic Lock Release
+```csharp
+await using var lockHandle = await distributedLock.AcquireLockHandleAsync("resource-1", "owner-abc");
+// Lock is automatically released when the handle goes out of scope
+```
+
+### ✅ Exception Safety
+```csharp
+await using var lockHandle = await distributedLock.AcquireLockHandleAsync("resource-1", "owner-abc");
+if (lockHandle == null) return;
+
+throw new Exception("Oops!"); // Lock is still properly released
+```
+
+### ✅ Lock Metadata Access
+```csharp
+await using var lockHandle = await distributedLock.AcquireLockHandleAsync("resource-1", "owner-abc");
+if (lockHandle == null) return;
+
+Console.WriteLine($"Lock acquired for {lockHandle.ResourceId} by {lockHandle.OwnerId}");
+Console.WriteLine($"Lock expires at: {lockHandle.ExpiresAt}");
+Console.WriteLine($"Lock is still valid: {lockHandle.IsAcquired}");
 ```
 
 ---
@@ -114,10 +165,11 @@ The library provides `DynamoDbDistributedLockAutoData` to support streamlined te
 
 ## 🔮 Future Enhancements
 
-- ⚙️ Configurable partition/sort key field names
 - ⏱ Lock renewal support
 - 🔁 Auto-release logic for expired locks
 - 📈 Metrics and diagnostics support
+- 🔄 Retry policies for lock acquisition
+- 🎯 Health check integration
 
 ---
 

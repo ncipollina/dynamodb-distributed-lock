@@ -37,35 +37,8 @@ public class DynamoDbDistributedLock : IDynamoDbDistributedLock
     /// <returns><c>true</c> if the lock was acquired; otherwise, <c>false</c>.</returns>
     public async Task<bool> AcquireLockAsync(string resourceId, string ownerId, CancellationToken cancellationToken = default)
     {
-        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        var expiresAt = now + _options.LockTimeoutSeconds;
-
-        var request = new PutItemRequest
-        {
-            TableName = _options.TableName,
-            Item = new Dictionary<string, AttributeValue>
-            {
-                [_options.PartitionKeyAttribute] = new() { S = $"lock#{resourceId}" },
-                [_options.SortKeyAttribute] = new() { S = "metadata#lock" },
-                ["ownerId"] = new() { S = ownerId },
-                ["expiresAt"] = new() { N = expiresAt.ToString() }
-            },
-            ConditionExpression = "attribute_not_exists(pk) AND attribute_not_exists(sk) OR expiresAt < :now",
-            ExpressionAttributeValues = new Dictionary<string, AttributeValue>
-            {
-                [":now"] = new() { N = now.ToString() }
-            }
-        };
-
-        try
-        {
-            await _client.PutItemAsync(request, cancellationToken);
-            return true; // Lock acquired
-        }
-        catch (ConditionalCheckFailedException)
-        {
-            return false; // Lock already held
-        }
+        var result = await TryAcquireLockInternalAsync(resourceId, ownerId, cancellationToken);
+        return result.IsSuccess;
     }
 
     /// <summary>
@@ -102,4 +75,53 @@ public class DynamoDbDistributedLock : IDynamoDbDistributedLock
             return false; // Lock was held by another process
         }
     }
+
+    /// <summary>
+    /// Attempts to acquire a distributed lock on the specified resource and returns a handle for automatic cleanup.
+    /// </summary>
+    /// <param name="resourceId">The resource identifier (e.g., a game or operation name).</param>
+    /// <param name="ownerId">The unique ID of the lock owner.</param>
+    /// <param name="cancellationToken">A cancellation token for the async operation.</param>
+    /// <returns>An <see cref="IDistributedLockHandle"/> if the lock was successfully acquired; otherwise, <c>null</c>.</returns>
+    public async Task<IDistributedLockHandle?> AcquireLockHandleAsync(string resourceId, string ownerId, CancellationToken cancellationToken = default)
+    {
+        var result = await TryAcquireLockInternalAsync(resourceId, ownerId, cancellationToken);
+        return result.IsSuccess ? new DistributedLockHandle(this, resourceId, ownerId, result.ExpiresAt) : null;
+    }
+
+    private async Task<LockAcquisitionResult> TryAcquireLockInternalAsync(string resourceId, string ownerId, CancellationToken cancellationToken)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var expiresAt = now.AddSeconds(_options.LockTimeoutSeconds);
+        var expiresAtUnix = expiresAt.ToUnixTimeSeconds();
+
+        var request = new PutItemRequest
+        {
+            TableName = _options.TableName,
+            Item = new Dictionary<string, AttributeValue>
+            {
+                [_options.PartitionKeyAttribute] = new() { S = $"lock#{resourceId}" },
+                [_options.SortKeyAttribute] = new() { S = "metadata#lock" },
+                ["ownerId"] = new() { S = ownerId },
+                ["expiresAt"] = new() { N = expiresAtUnix.ToString() }
+            },
+            ConditionExpression = "attribute_not_exists(pk) AND attribute_not_exists(sk) OR expiresAt < :now",
+            ExpressionAttributeValues = new Dictionary<string, AttributeValue>
+            {
+                [":now"] = new() { N = now.ToUnixTimeSeconds().ToString() }
+            }
+        };
+
+        try
+        {
+            await _client.PutItemAsync(request, cancellationToken);
+            return new LockAcquisitionResult(true, expiresAt);
+        }
+        catch (ConditionalCheckFailedException)
+        {
+            return new LockAcquisitionResult(false, default);
+        }
+    }
+
+    private readonly record struct LockAcquisitionResult(bool IsSuccess, DateTimeOffset ExpiresAt);
 }
