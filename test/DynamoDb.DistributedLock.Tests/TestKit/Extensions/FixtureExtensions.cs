@@ -29,4 +29,15 @@ public static class FixtureExtensions
         fixture.Customizations.Add(new OptionsSpecimenBuilder<DynamoDbLockOptions>());
         return fixture;
     }
+
+    /// <summary>
+    /// Adds a customization that creates instances of <see cref="DistributedLockHandle"/> for testing.
+    /// </summary>
+    /// <param name="fixture">The AutoFixture instance to customize.</param>
+    /// <returns>The same <see cref="IFixture"/> instance for chaining.</returns>
+    public static IFixture AddDistributedLockHandle(this IFixture fixture)
+    {
+        fixture.Customizations.Add(new DistributedLockHandleSpecimenBuilder());
+        return fixture;
+    }
 }

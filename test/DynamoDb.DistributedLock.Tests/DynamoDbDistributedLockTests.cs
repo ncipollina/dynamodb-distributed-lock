@@ -141,4 +141,92 @@ public class DynamoDbDistributedLockTests
         // Assert
         await act.Should().ThrowAsync<InvalidOperationException>();
     }
+
+    [Theory]
+    [DynamoDbDistributedLockAutoData]
+    public async Task AcquireLockHandleAsync_WhenLockIsAvailable_ShouldReturnHandle(
+        [Frozen] IAmazonDynamoDB dynamo,
+        DynamoDbDistributedLock sut,
+        string resourceId,
+        string ownerId)
+    {
+        // Arrange
+        dynamo.PutItemAsync(Arg.Any<PutItemRequest>(), Arg.Any<CancellationToken>())
+            .Returns(new PutItemResponse());
+
+        // Act
+        var result = await sut.AcquireLockHandleAsync(resourceId, ownerId, CancellationToken.None);
+
+        // Assert
+        result.Should().NotBeNull();
+        result!.ResourceId.Should().Be(resourceId);
+        result.OwnerId.Should().Be(ownerId);
+        result.IsAcquired.Should().BeTrue();
+        result.ExpiresAt.Should().BeAfter(DateTimeOffset.UtcNow);
+    }
+
+    [Theory]
+    [DynamoDbDistributedLockAutoData]
+    public async Task AcquireLockHandleAsync_WhenLockAlreadyExists_ShouldReturnNull(
+        [Frozen] IAmazonDynamoDB dynamo,
+        DynamoDbDistributedLock sut,
+        string resourceId,
+        string ownerId)
+    {
+        // Arrange
+        dynamo.PutItemAsync(Arg.Any<PutItemRequest>(), Arg.Any<CancellationToken>())
+            .ThrowsAsync(new ConditionalCheckFailedException("lock exists"));
+
+        // Act
+        var result = await sut.AcquireLockHandleAsync(resourceId, ownerId, CancellationToken.None);
+
+        // Assert
+        result.Should().BeNull();
+    }
+
+    [Theory]
+    [DynamoDbDistributedLockAutoData]
+    public async Task AcquireLockHandleAsync_WhenUnexpectedExceptionOccurs_ShouldThrow(
+        [Frozen] IAmazonDynamoDB dynamo,
+        DynamoDbDistributedLock sut,
+        string resourceId,
+        string ownerId)
+    {
+        // Arrange
+        dynamo.PutItemAsync(Arg.Any<PutItemRequest>(), Arg.Any<CancellationToken>())
+            .ThrowsAsync(new InvalidOperationException("unexpected failure"));
+
+        // Act
+        var act = async () => await sut.AcquireLockHandleAsync(resourceId, ownerId, CancellationToken.None);
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>();
+    }
+
+    [Theory]
+    [DynamoDbDistributedLockAutoData]
+    public async Task AcquireLockHandleAsync_DisposeHandle_ShouldCallReleaseLock(
+        [Frozen] IAmazonDynamoDB dynamo,
+        DynamoDbDistributedLock sut,
+        string resourceId,
+        string ownerId)
+    {
+        // Arrange
+        dynamo.PutItemAsync(Arg.Any<PutItemRequest>(), Arg.Any<CancellationToken>())
+            .Returns(new PutItemResponse());
+        dynamo.DeleteItemAsync(Arg.Any<DeleteItemRequest>(), Arg.Any<CancellationToken>())
+            .Returns(new DeleteItemResponse());
+
+        // Act
+        var handle = await sut.AcquireLockHandleAsync(resourceId, ownerId, CancellationToken.None);
+        await handle!.DisposeAsync();
+
+        // Assert
+        await dynamo.Received(1).DeleteItemAsync(
+            Arg.Is<DeleteItemRequest>(req => 
+                req.ConditionExpression.Contains("ownerId = :owner") &&
+                req.ExpressionAttributeValues.ContainsKey(":owner") &&
+                req.ExpressionAttributeValues[":owner"].S == ownerId),
+            Arg.Any<CancellationToken>());
+    }
 }
