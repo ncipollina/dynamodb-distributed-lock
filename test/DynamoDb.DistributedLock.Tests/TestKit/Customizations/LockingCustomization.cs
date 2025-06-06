@@ -22,6 +22,9 @@ public class LockingCustomization : ICustomization
         // 🔗 Add DistributedLockHandle customization
         fixture.AddDistributedLockHandle();
         
+        // 🔄 Add retry policy customization
+        fixture.AddRetryPolicy();
+        
         // ❄️ Freeze core constructor dependencies
         fixture.Freeze<IAmazonDynamoDB>();
     }

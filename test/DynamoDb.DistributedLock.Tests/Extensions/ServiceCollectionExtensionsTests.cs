@@ -1,7 +1,7 @@
 using Amazon.DynamoDBv2;
 using DynamoDb.DistributedLock.Extensions;
 using DynamoDb.DistributedLock.Tests.TestKit.Attributes;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;

@@ -1,6 +1,6 @@
 using AutoFixture.Xunit3;
 using DynamoDb.DistributedLock.Tests.TestKit.Attributes;
-using FluentAssertions;
+using AwesomeAssertions;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
 

@@ -10,6 +10,7 @@
 - ✅ AWS-native, no external infrastructure required
 - ✅ Simple `IDynamoDbDistributedLock` interface
 - ✅ **IAsyncDisposable support** for automatic lock cleanup
+- ✅ **Retry logic** with exponential backoff for handling lock contention and throttling
 - ✅ Tested and production-ready for .NET 8 and 9
 
 ---
@@ -136,6 +137,63 @@ Console.WriteLine($"Lock is still valid: {lockHandle.IsAcquired}");
 
 ---
 
+## 🔄 Retry Configuration (v1.2.0+)
+
+The library includes built-in retry logic with exponential backoff to handle lock contention and DynamoDB throttling. Retry is **disabled by default** to maintain backward compatibility.
+
+### ✅ Enable Retry Logic
+```csharp
+services.AddDynamoDbDistributedLock(options =>
+{
+    options.TableName = "my-lock-table";
+    options.Retry.Enabled = true;              // Enable retry logic
+    options.Retry.MaxAttempts = 5;             // Max retry attempts (default: 3)
+    options.Retry.BaseDelay = TimeSpan.FromMilliseconds(100);  // Base delay (default: 100ms)
+    options.Retry.MaxDelay = TimeSpan.FromSeconds(5);          // Max delay (default: 5s)
+    options.Retry.BackoffMultiplier = 2.0;     // Exponential multiplier (default: 2.0)
+    options.Retry.UseJitter = true;            // Add jitter to prevent thundering herd (default: true)
+    options.Retry.JitterFactor = 0.25;         // Jitter factor as percentage (default: 0.25 = 25%)
+});
+```
+
+### ✅ Configuration via appsettings.json
+```json
+{
+  "DynamoDbLock": {
+    "TableName": "my-lock-table",
+    "Retry": {
+      "Enabled": true,
+      "MaxAttempts": 5,
+      "BaseDelay": "00:00:00.100",
+      "MaxDelay": "00:00:05",
+      "BackoffMultiplier": 2.0,
+      "UseJitter": true,
+      "JitterFactor": 0.25
+    }
+  }
+}
+```
+
+### ✅ When Retry is Triggered
+The retry logic automatically handles these scenarios:
+- **Lock contention** - When another process holds the lock (`ConditionalCheckFailedException`)
+- **DynamoDB throttling** - When requests exceed provisioned capacity (`ProvisionedThroughputExceededException`)
+- **Internal errors** - Transient DynamoDB service errors (`InternalServerErrorException`)
+- **Rate limiting** - When request rate is exceeded (`RequestLimitExceededException`)
+
+### ✅ Exponential Backoff Example
+```
+Attempt 1: Immediate
+Attempt 2: 100ms + jitter
+Attempt 3: 200ms + jitter  
+Attempt 4: 400ms + jitter
+Attempt 5: 800ms + jitter (capped at MaxDelay)
+```
+
+> **Note:** Jitter adds randomness (configurable percentage of delay, default 25%) to prevent multiple clients from retrying simultaneously.
+
+---
+
 ## 🏗️ Table Schema
 
 This library supports both dedicated tables and shared, single-table designs. You do not need to create a separate table just for locking — this works seamlessly alongside your existing entities.
@@ -168,7 +226,6 @@ The library provides `DynamoDbDistributedLockAutoData` to support streamlined te
 - ⏱ Lock renewal support
 - 🔁 Auto-release logic for expired locks
 - 📈 Metrics and diagnostics support
-- 🔄 Retry policies for lock acquisition
 - 🎯 Health check integration
 
 ---

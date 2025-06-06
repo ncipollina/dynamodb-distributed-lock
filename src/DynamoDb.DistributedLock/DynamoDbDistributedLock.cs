@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Amazon.DynamoDBv2;
 using Amazon.DynamoDBv2.Model;
+using DynamoDb.DistributedLock.Retry;
 using Microsoft.Extensions.Options;
 
 namespace DynamoDb.DistributedLock;
@@ -15,6 +16,7 @@ public class DynamoDbDistributedLock : IDynamoDbDistributedLock
 {
     private readonly IAmazonDynamoDB _client;
     private readonly DynamoDbLockOptions _options;
+    private readonly Lazy<IRetryPolicy> _retryPolicy;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="DynamoDbDistributedLock"/> class.
@@ -26,6 +28,7 @@ public class DynamoDbDistributedLock : IDynamoDbDistributedLock
     {
         _client = client ?? throw new ArgumentNullException(nameof(client));
         _options = options.Value ?? throw new ArgumentNullException(nameof(options));
+        _retryPolicy = new Lazy<IRetryPolicy>(() => new ExponentialBackoffRetryPolicy(_options.Retry));
     }
 
     /// <summary>
@@ -91,6 +94,42 @@ public class DynamoDbDistributedLock : IDynamoDbDistributedLock
 
     private async Task<LockAcquisitionResult> TryAcquireLockInternalAsync(string resourceId, string ownerId, CancellationToken cancellationToken)
     {
+        if (!_options.Retry.Enabled)
+        {
+            return await TryAcquireLockOnceAsync(resourceId, ownerId, suppressExceptions: true, cancellationToken);
+        }
+
+        try
+        {
+            return await _retryPolicy.Value.ExecuteAsync(
+                async ct => await TryAcquireLockOnceAsync(resourceId, ownerId, suppressExceptions: false, ct),
+                ShouldRetryLockAcquisition,
+                cancellationToken);
+        }
+        catch (Exception ex) when (ShouldRetryLockAcquisition(ex))
+        {
+            // After all retry attempts failed due to retriable exceptions (lock conflicts, throttling, etc.)
+            return new LockAcquisitionResult(false, default);
+        }
+    }
+
+    private async Task<LockAcquisitionResult> TryAcquireLockOnceAsync(string resourceId, string ownerId, bool suppressExceptions, CancellationToken cancellationToken)
+    {
+        var (request, expiresAt) = CreatePutItemRequest(resourceId, ownerId);
+        
+        try
+        {
+            await _client.PutItemAsync(request, cancellationToken);
+            return new LockAcquisitionResult(true, expiresAt);
+        }
+        catch (ConditionalCheckFailedException) when (suppressExceptions)
+        {
+            return new LockAcquisitionResult(false, default);
+        }
+    }
+
+    private (PutItemRequest Request, DateTimeOffset ExpiresAt) CreatePutItemRequest(string resourceId, string ownerId)
+    {
         var now = DateTimeOffset.UtcNow;
         var expiresAt = now.AddSeconds(_options.LockTimeoutSeconds);
         var expiresAtUnix = expiresAt.ToUnixTimeSeconds();
@@ -112,15 +151,19 @@ public class DynamoDbDistributedLock : IDynamoDbDistributedLock
             }
         };
 
-        try
+        return (request, expiresAt);
+    }
+
+    private static bool ShouldRetryLockAcquisition(Exception exception)
+    {
+        return exception switch
         {
-            await _client.PutItemAsync(request, cancellationToken);
-            return new LockAcquisitionResult(true, expiresAt);
-        }
-        catch (ConditionalCheckFailedException)
-        {
-            return new LockAcquisitionResult(false, default);
-        }
+            ConditionalCheckFailedException => true, // Lock is held by another process - retry
+            ProvisionedThroughputExceededException => true, // DynamoDB throttling - retry
+            InternalServerErrorException => true, // DynamoDB internal error - retry
+            RequestLimitExceededException => true, // DynamoDB request rate exceeded - retry
+            _ => false // Other exceptions should not be retried
+        };
     }
 
     private readonly record struct LockAcquisitionResult(bool IsSuccess, DateTimeOffset ExpiresAt);
