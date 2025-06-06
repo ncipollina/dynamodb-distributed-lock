@@ -105,7 +105,7 @@ public class DynamoDbDistributedLock : IDynamoDbDistributedLock
                 ["ownerId"] = new() { S = ownerId },
                 ["expiresAt"] = new() { N = expiresAtUnix.ToString() }
             },
-            ConditionExpression = "attribute_not_exists(pk) AND attribute_not_exists(sk) OR expiresAt < :now",
+            ConditionExpression = $"attribute_not_exists({_options.PartitionKeyAttribute}) AND attribute_not_exists({_options.SortKeyAttribute}) OR expiresAt < :now",
             ExpressionAttributeValues = new Dictionary<string, AttributeValue>
             {
                 [":now"] = new() { N = now.ToUnixTimeSeconds().ToString() }
