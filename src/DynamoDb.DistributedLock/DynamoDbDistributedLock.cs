@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Amazon.DynamoDBv2;
 using Amazon.DynamoDBv2.Model;
+using DynamoDb.DistributedLock.Retry;
 using Microsoft.Extensions.Options;
 
 namespace DynamoDb.DistributedLock;
@@ -91,6 +92,29 @@ public class DynamoDbDistributedLock : IDynamoDbDistributedLock
 
     private async Task<LockAcquisitionResult> TryAcquireLockInternalAsync(string resourceId, string ownerId, CancellationToken cancellationToken)
     {
+        if (!_options.Retry.Enabled)
+        {
+            return await TryAcquireLockOnceAsync(resourceId, ownerId, cancellationToken);
+        }
+
+        var retryPolicy = new ExponentialBackoffRetryPolicy(_options.Retry);
+        
+        try
+        {
+            return await retryPolicy.ExecuteAsync(
+                async ct => await TryAcquireLockOnceWithExceptionsAsync(resourceId, ownerId, ct),
+                ShouldRetryLockAcquisition,
+                cancellationToken);
+        }
+        catch (ConditionalCheckFailedException)
+        {
+            // After all retry attempts failed due to lock conflicts
+            return new LockAcquisitionResult(false, default);
+        }
+    }
+
+    private async Task<LockAcquisitionResult> TryAcquireLockOnceAsync(string resourceId, string ownerId, CancellationToken cancellationToken)
+    {
         var now = DateTimeOffset.UtcNow;
         var expiresAt = now.AddSeconds(_options.LockTimeoutSeconds);
         var expiresAtUnix = expiresAt.ToUnixTimeSeconds();
@@ -121,6 +145,45 @@ public class DynamoDbDistributedLock : IDynamoDbDistributedLock
         {
             return new LockAcquisitionResult(false, default);
         }
+    }
+
+    private async Task<LockAcquisitionResult> TryAcquireLockOnceWithExceptionsAsync(string resourceId, string ownerId, CancellationToken cancellationToken)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var expiresAt = now.AddSeconds(_options.LockTimeoutSeconds);
+        var expiresAtUnix = expiresAt.ToUnixTimeSeconds();
+
+        var request = new PutItemRequest
+        {
+            TableName = _options.TableName,
+            Item = new Dictionary<string, AttributeValue>
+            {
+                [_options.PartitionKeyAttribute] = new() { S = $"lock#{resourceId}" },
+                [_options.SortKeyAttribute] = new() { S = "metadata#lock" },
+                ["ownerId"] = new() { S = ownerId },
+                ["expiresAt"] = new() { N = expiresAtUnix.ToString() }
+            },
+            ConditionExpression = $"(attribute_not_exists({_options.PartitionKeyAttribute}) AND attribute_not_exists({_options.SortKeyAttribute})) OR expiresAt < :now",
+            ExpressionAttributeValues = new Dictionary<string, AttributeValue>
+            {
+                [":now"] = new() { N = now.ToUnixTimeSeconds().ToString() }
+            }
+        };
+
+        await _client.PutItemAsync(request, cancellationToken);
+        return new LockAcquisitionResult(true, expiresAt);
+    }
+
+    private static bool ShouldRetryLockAcquisition(Exception exception)
+    {
+        return exception switch
+        {
+            ConditionalCheckFailedException => true, // Lock is held by another process - retry
+            ProvisionedThroughputExceededException => true, // DynamoDB throttling - retry
+            InternalServerErrorException => true, // DynamoDB internal error - retry
+            RequestLimitExceededException => true, // DynamoDB request rate exceeded - retry
+            _ => false // Other exceptions should not be retried
+        };
     }
 
     private readonly record struct LockAcquisitionResult(bool IsSuccess, DateTimeOffset ExpiresAt);

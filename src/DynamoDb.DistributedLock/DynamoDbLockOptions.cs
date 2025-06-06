@@ -1,3 +1,5 @@
+using DynamoDb.DistributedLock.Retry;
+
 namespace DynamoDb.DistributedLock;
 
 /// <summary>
@@ -25,4 +27,9 @@ public sealed class DynamoDbLockOptions
     /// The name of the sort key attribute.
     /// </summary>
     public string SortKeyAttribute { get; set; } = "sk";
+    
+    /// <summary>
+    /// Retry configuration for lock acquisition operations.
+    /// </summary>
+    public RetryOptions Retry { get; set; } = new();
 }

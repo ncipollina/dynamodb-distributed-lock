@@ -40,4 +40,15 @@ public static class FixtureExtensions
         fixture.Customizations.Add(new DistributedLockHandleSpecimenBuilder());
         return fixture;
     }
+
+    /// <summary>
+    /// Adds a customization that creates retry policy instances for testing.
+    /// </summary>
+    /// <param name="fixture">The AutoFixture instance to customize.</param>
+    /// <returns>The same <see cref="IFixture"/> instance for chaining.</returns>
+    public static IFixture AddRetryPolicy(this IFixture fixture)
+    {
+        fixture.Customizations.Add(new RetryPolicySpecimenBuilder());
+        return fixture;
+    }
 }
