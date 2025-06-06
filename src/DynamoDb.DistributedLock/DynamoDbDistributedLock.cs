@@ -16,6 +16,7 @@ public class DynamoDbDistributedLock : IDynamoDbDistributedLock
 {
     private readonly IAmazonDynamoDB _client;
     private readonly DynamoDbLockOptions _options;
+    private readonly Lazy<IRetryPolicy> _retryPolicy;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="DynamoDbDistributedLock"/> class.
@@ -27,6 +28,7 @@ public class DynamoDbDistributedLock : IDynamoDbDistributedLock
     {
         _client = client ?? throw new ArgumentNullException(nameof(client));
         _options = options.Value ?? throw new ArgumentNullException(nameof(options));
+        _retryPolicy = new Lazy<IRetryPolicy>(() => new ExponentialBackoffRetryPolicy(_options.Retry));
     }
 
     /// <summary>
@@ -97,11 +99,9 @@ public class DynamoDbDistributedLock : IDynamoDbDistributedLock
             return await TryAcquireLockOnceAsync(resourceId, ownerId, cancellationToken);
         }
 
-        var retryPolicy = new ExponentialBackoffRetryPolicy(_options.Retry);
-        
         try
         {
-            return await retryPolicy.ExecuteAsync(
+            return await _retryPolicy.Value.ExecuteAsync(
                 async ct => await TryAcquireLockOnceWithExceptionsAsync(resourceId, ownerId, ct),
                 ShouldRetryLockAcquisition,
                 cancellationToken);
@@ -115,27 +115,8 @@ public class DynamoDbDistributedLock : IDynamoDbDistributedLock
 
     private async Task<LockAcquisitionResult> TryAcquireLockOnceAsync(string resourceId, string ownerId, CancellationToken cancellationToken)
     {
-        var now = DateTimeOffset.UtcNow;
-        var expiresAt = now.AddSeconds(_options.LockTimeoutSeconds);
-        var expiresAtUnix = expiresAt.ToUnixTimeSeconds();
-
-        var request = new PutItemRequest
-        {
-            TableName = _options.TableName,
-            Item = new Dictionary<string, AttributeValue>
-            {
-                [_options.PartitionKeyAttribute] = new() { S = $"lock#{resourceId}" },
-                [_options.SortKeyAttribute] = new() { S = "metadata#lock" },
-                ["ownerId"] = new() { S = ownerId },
-                ["expiresAt"] = new() { N = expiresAtUnix.ToString() }
-            },
-            ConditionExpression = $"(attribute_not_exists({_options.PartitionKeyAttribute}) AND attribute_not_exists({_options.SortKeyAttribute})) OR expiresAt < :now",
-            ExpressionAttributeValues = new Dictionary<string, AttributeValue>
-            {
-                [":now"] = new() { N = now.ToUnixTimeSeconds().ToString() }
-            }
-        };
-
+        var (request, expiresAt) = CreatePutItemRequest(resourceId, ownerId);
+        
         try
         {
             await _client.PutItemAsync(request, cancellationToken);
@@ -148,6 +129,14 @@ public class DynamoDbDistributedLock : IDynamoDbDistributedLock
     }
 
     private async Task<LockAcquisitionResult> TryAcquireLockOnceWithExceptionsAsync(string resourceId, string ownerId, CancellationToken cancellationToken)
+    {
+        var (request, expiresAt) = CreatePutItemRequest(resourceId, ownerId);
+        
+        await _client.PutItemAsync(request, cancellationToken);
+        return new LockAcquisitionResult(true, expiresAt);
+    }
+
+    private (PutItemRequest Request, DateTimeOffset ExpiresAt) CreatePutItemRequest(string resourceId, string ownerId)
     {
         var now = DateTimeOffset.UtcNow;
         var expiresAt = now.AddSeconds(_options.LockTimeoutSeconds);
@@ -170,8 +159,7 @@ public class DynamoDbDistributedLock : IDynamoDbDistributedLock
             }
         };
 
-        await _client.PutItemAsync(request, cancellationToken);
-        return new LockAcquisitionResult(true, expiresAt);
+        return (request, expiresAt);
     }
 
     private static bool ShouldRetryLockAcquisition(Exception exception)
