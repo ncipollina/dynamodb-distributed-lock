@@ -96,13 +96,13 @@ public class DynamoDbDistributedLock : IDynamoDbDistributedLock
     {
         if (!_options.Retry.Enabled)
         {
-            return await TryAcquireLockOnceAsync(resourceId, ownerId, cancellationToken);
+            return await TryAcquireLockOnceAsync(resourceId, ownerId, suppressExceptions: true, cancellationToken);
         }
 
         try
         {
             return await _retryPolicy.Value.ExecuteAsync(
-                async ct => await TryAcquireLockOnceWithExceptionsAsync(resourceId, ownerId, ct),
+                async ct => await TryAcquireLockOnceAsync(resourceId, ownerId, suppressExceptions: false, ct),
                 ShouldRetryLockAcquisition,
                 cancellationToken);
         }
@@ -113,7 +113,7 @@ public class DynamoDbDistributedLock : IDynamoDbDistributedLock
         }
     }
 
-    private async Task<LockAcquisitionResult> TryAcquireLockOnceAsync(string resourceId, string ownerId, CancellationToken cancellationToken)
+    private async Task<LockAcquisitionResult> TryAcquireLockOnceAsync(string resourceId, string ownerId, bool suppressExceptions, CancellationToken cancellationToken)
     {
         var (request, expiresAt) = CreatePutItemRequest(resourceId, ownerId);
         
@@ -122,18 +122,10 @@ public class DynamoDbDistributedLock : IDynamoDbDistributedLock
             await _client.PutItemAsync(request, cancellationToken);
             return new LockAcquisitionResult(true, expiresAt);
         }
-        catch (ConditionalCheckFailedException)
+        catch (ConditionalCheckFailedException) when (suppressExceptions)
         {
             return new LockAcquisitionResult(false, default);
         }
-    }
-
-    private async Task<LockAcquisitionResult> TryAcquireLockOnceWithExceptionsAsync(string resourceId, string ownerId, CancellationToken cancellationToken)
-    {
-        var (request, expiresAt) = CreatePutItemRequest(resourceId, ownerId);
-        
-        await _client.PutItemAsync(request, cancellationToken);
-        return new LockAcquisitionResult(true, expiresAt);
     }
 
     private (PutItemRequest Request, DateTimeOffset ExpiresAt) CreatePutItemRequest(string resourceId, string ownerId)

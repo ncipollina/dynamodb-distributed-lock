@@ -10,7 +10,6 @@ namespace DynamoDb.DistributedLock.Retry;
 public sealed class ExponentialBackoffRetryPolicy : IRetryPolicy
 {
     private readonly RetryOptions _options;
-    private readonly Random _random;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ExponentialBackoffRetryPolicy"/> class.
@@ -19,7 +18,6 @@ public sealed class ExponentialBackoffRetryPolicy : IRetryPolicy
     public ExponentialBackoffRetryPolicy(RetryOptions options)
     {
         _options = options ?? throw new ArgumentNullException(nameof(options));
-        _random = new Random();
     }
 
     /// <inheritdoc />
@@ -73,7 +71,7 @@ public sealed class ExponentialBackoffRetryPolicy : IRetryPolicy
         {
             // Add random jitter up to 25% of the delay to avoid thundering herd
             var jitterRange = delay.TotalMilliseconds * 0.25;
-            var jitter = _random.NextDouble() * jitterRange;
+            var jitter = Random.Shared.NextDouble() * jitterRange;
             delay = TimeSpan.FromMilliseconds(delay.TotalMilliseconds + jitter);
         }
 
