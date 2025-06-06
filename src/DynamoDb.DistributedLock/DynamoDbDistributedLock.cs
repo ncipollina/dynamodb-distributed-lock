@@ -106,9 +106,9 @@ public class DynamoDbDistributedLock : IDynamoDbDistributedLock
                 ShouldRetryLockAcquisition,
                 cancellationToken);
         }
-        catch (ConditionalCheckFailedException)
+        catch (Exception ex) when (ShouldRetryLockAcquisition(ex))
         {
-            // After all retry attempts failed due to lock conflicts
+            // After all retry attempts failed due to retriable exceptions (lock conflicts, throttling, etc.)
             return new LockAcquisitionResult(false, default);
         }
     }

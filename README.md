@@ -152,6 +152,7 @@ services.AddDynamoDbDistributedLock(options =>
     options.Retry.MaxDelay = TimeSpan.FromSeconds(5);          // Max delay (default: 5s)
     options.Retry.BackoffMultiplier = 2.0;     // Exponential multiplier (default: 2.0)
     options.Retry.UseJitter = true;            // Add jitter to prevent thundering herd (default: true)
+    options.Retry.JitterFactor = 0.25;         // Jitter factor as percentage (default: 0.25 = 25%)
 });
 ```
 
@@ -166,7 +167,8 @@ services.AddDynamoDbDistributedLock(options =>
       "BaseDelay": "00:00:00.100",
       "MaxDelay": "00:00:05",
       "BackoffMultiplier": 2.0,
-      "UseJitter": true
+      "UseJitter": true,
+      "JitterFactor": 0.25
     }
   }
 }
@@ -188,7 +190,7 @@ Attempt 4: 400ms + jitter
 Attempt 5: 800ms + jitter (capped at MaxDelay)
 ```
 
-> **Note:** Jitter adds randomness (up to 25% of delay) to prevent multiple clients from retrying simultaneously.
+> **Note:** Jitter adds randomness (configurable percentage of delay, default 25%) to prevent multiple clients from retrying simultaneously.
 
 ---
 

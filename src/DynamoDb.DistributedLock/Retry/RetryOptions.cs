@@ -33,6 +33,11 @@ public sealed class RetryOptions
     public bool UseJitter { get; set; } = true;
 
     /// <summary>
+    /// Gets or sets the jitter factor as a percentage of the delay (0.0 to 1.0). Default is 0.25 (25%).
+    /// </summary>
+    public double JitterFactor { get; set; } = 0.25;
+
+    /// <summary>
     /// Gets or sets whether retry is enabled. Default is false to maintain backward compatibility.
     /// </summary>
     public bool Enabled { get; set; } = false;

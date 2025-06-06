@@ -69,8 +69,8 @@ public sealed class ExponentialBackoffRetryPolicy : IRetryPolicy
 
         if (_options.UseJitter)
         {
-            // Add random jitter up to 25% of the delay to avoid thundering herd
-            var jitterRange = delay.TotalMilliseconds * 0.25;
+            // Add random jitter to avoid thundering herd
+            var jitterRange = delay.TotalMilliseconds * _options.JitterFactor;
             var jitter = Random.Shared.NextDouble() * jitterRange;
             delay = TimeSpan.FromMilliseconds(delay.TotalMilliseconds + jitter);
         }

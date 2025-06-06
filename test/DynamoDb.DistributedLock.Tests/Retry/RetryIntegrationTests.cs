@@ -189,4 +189,30 @@ public class RetryIntegrationTests
         result.IsAcquired.Should().BeTrue();
         await dynamo.Received(2).PutItemAsync(Arg.Any<PutItemRequest>(), Arg.Any<CancellationToken>());
     }
+
+    [Theory]
+    [DynamoDbDistributedLockAutoData]
+    public async Task AcquireLockAsync_WhenRetryEnabledAndThrottlingExhaustsRetries_ShouldReturnFalse(
+        [Frozen] IAmazonDynamoDB dynamo,
+        [Frozen] IOptions<DynamoDbLockOptions> options,
+        string resourceId,
+        string ownerId)
+    {
+        // Arrange
+        options.Value.Retry.Enabled = true;
+        options.Value.Retry.MaxAttempts = 2;
+        options.Value.Retry.BaseDelay = TimeSpan.FromMilliseconds(1); // Fast test
+
+        dynamo.PutItemAsync(Arg.Any<PutItemRequest>(), Arg.Any<CancellationToken>())
+            .ThrowsAsync(new ProvisionedThroughputExceededException("Throttled"));
+
+        var sut = new DynamoDbDistributedLock(dynamo, options);
+
+        // Act
+        var result = await sut.AcquireLockAsync(resourceId, ownerId);
+
+        // Assert
+        result.Should().BeFalse();
+        await dynamo.Received(2).PutItemAsync(Arg.Any<PutItemRequest>(), Arg.Any<CancellationToken>());
+    }
 }
