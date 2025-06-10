@@ -9,5 +9,9 @@
         <Authors>Nick Cipollina</Authors>
         <PackageProjectUrl>https://github.com/LayeredCraft/dynamodb-distributed-lock</PackageProjectUrl>
     </PropertyGroup>
+    <!-- Globally disable packing for any test project that sets IsTestProject=true -->
+    <PropertyGroup Condition="'$(IsTestProject)' == 'true'">
+        <IsPackable>false</IsPackable>
+    </PropertyGroup>
 
 </Project>
